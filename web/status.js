@@ -1,4 +1,8 @@
-var STATUS_VERSION = '1481557231469';
+var COLOR_SUCCESS_BACKGROUND = Color.fromHex('#00AA00');
+var COLOR_SUCCESS_BORDER = Color.fromHex('#006600');
+
+var COLOR_WARNING_BACKGROUND = Color.fromHex('#CCCC00');
+var COLOR_WARNING_BORDER = Color.fromHex('#999900');
 
 var versions = [
     'php53',
@@ -23,10 +27,17 @@ function updateStatus(status, json, err) {
         return;
     }
 
-    var text = json['active processes'] + '/' + json['total processes'];
-
     $badge.addClass('success');
-    $text.text(text);
+
+    var v = (json['active processes'] - 1) / (json['total processes'] - 1);
+    var background = COLOR_SUCCESS_BACKGROUND.tween(COLOR_WARNING_BACKGROUND, v);
+    var border = COLOR_SUCCESS_BORDER.tween(COLOR_WARNING_BORDER, v);
+    $badge.css({
+        'background-color': background.toHex(),
+        'border-color': border.toHex()
+    });
+
+    $text.text(json['active processes'] + '/' + json['total processes']);
 }
 
 function formatVersion(version) {
@@ -58,6 +69,10 @@ function createStatus(version) {
 function fetchVersion(version, idx) {
     var status = statuses[version];
     setTimeout(function () {
+        status.badge.css({
+            'background-color': '',
+            'border-color': ''
+        });
         status.badge.removeClass('success error').addClass('pending');
         status.text.text('Pending…');
     }, Math.random() * 500);
@@ -66,13 +81,15 @@ function fetchVersion(version, idx) {
     $.getJSON(url)
         .done(function (json) {
             setTimeout(function () {
-                updateStatus(status, json);
-            }, 550 + Math.random() * 500);
+                status.badge.one('animationiteration webkitAnimationIteration MSAnimationIteration', function () {
+                    updateStatus(status, json);
+                });
+            }, 750 + Math.random() * 500);
         })
         .fail(function (e) {
             setTimeout(function () {
                 updateStatus(status, null, e);
-            }, 550 + Math.random() * 500);
+            }, 750 + Math.random() * 500);
         });
 }
 
@@ -95,8 +112,6 @@ function tick() {
 
 $(function () {
     versions.forEach(createStatus);
-    $('#countdown').text('Version: ' + STATUS_VERSION);
-    setTimeout(function () {
-        setInterval(tick, 1000);
-    }, 5000);
+    setInterval(tick, 1000);
 });
+
