@@ -10,7 +10,8 @@ var versions = [
     'php55',
     'php56',
     'php70',
-    'php71'
+    'php71',
+    'php72'
 ];
 
 var statuses = {};
@@ -114,4 +115,3 @@ $(function () {
     versions.forEach(createStatus);
     setInterval(tick, 1000);
 });
-
