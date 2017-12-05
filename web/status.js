@@ -12,6 +12,9 @@ const STATE = {
     WAITING: 2
 };
 
+let $container;
+let $countdown;
+
 let currentState = STATE.IDLE;
 
 let versions = [
@@ -74,7 +77,7 @@ function createStatus(version) {
     $status.append($badge);
     $status.append($text);
 
-    $('#container').append($status);
+    $container.append($status);
 
     let status = {
         badge: $badge,
@@ -131,13 +134,16 @@ function tick() {
     }
 
     if (currentState === STATE.UPDATING) {
-        $('#countdown').text('Updating…');
+        $countdown.text('Updating…');
     } else {
-        $('#countdown').text('Next update: ' + ((nextUpdate - now) / 1000).toFixed() + 's');
+        $countdown.text('Next update: ' + ((nextUpdate - now) / 1000).toFixed() + 's');
     }
 }
 
 $(() => {
+    $container = $('.container');
+    $countdown = $('.countdown');
+
     versions.forEach(createStatus);
     setInterval(tick, 1000);
     tick();
