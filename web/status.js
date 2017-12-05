@@ -1,10 +1,23 @@
-var COLOR_SUCCESS_BACKGROUND = Color.fromHex('#00AA00');
-var COLOR_SUCCESS_BORDER = Color.fromHex('#006600');
+const UPDATE_INTERVAL = 60000;
 
-var COLOR_WARNING_BACKGROUND = Color.fromHex('#CCCC00');
-var COLOR_WARNING_BORDER = Color.fromHex('#999900');
+const COLOR_SUCCESS_BACKGROUND = Color.fromHex('#00AA00');
+const COLOR_SUCCESS_BORDER = Color.fromHex('#006600');
 
-var versions = [
+const COLOR_WARNING_BACKGROUND = Color.fromHex('#CCCC00');
+const COLOR_WARNING_BORDER = Color.fromHex('#999900');
+
+const STATE = {
+    IDLE: 0,
+    UPDATING: 1,
+    WAITING: 2
+};
+
+let $container;
+let $countdown;
+
+let currentState = STATE.IDLE;
+
+let versions = [
     'php53',
     'php54',
     'php55',
@@ -14,25 +27,32 @@ var versions = [
     'php72'
 ];
 
-var statuses = {};
+let statuses = {};
+let nextUpdate;
 
 function updateStatus(status, json, err) {
-    var $badge = status.badge;
-    var $text = status.text;
+    let $badge = status.badge;
+    let $text = status.text;
 
-    $badge.removeClass('pending');
+    $badge.removeClass('status__badge--pending status__badge--success status__badge--error');
+
+    if (!json && !err) {
+        $badge.addClass('status__badge--pending');
+        $text.text('Pending…');
+        return;
+    }
 
     if (err) {
-        $badge.addClass('error').attr('title', err.toString());
+        $badge.addClass('status__badge--error').attr('title', err.toString());
         $text.text('Error: ' + err.status);
         return;
     }
 
-    $badge.addClass('success');
+    $badge.addClass('status__badge--success');
 
-    var v = (json['active processes'] - 1) / (json['total processes'] - 1);
-    var background = COLOR_SUCCESS_BACKGROUND.tween(COLOR_WARNING_BACKGROUND, v);
-    var border = COLOR_SUCCESS_BORDER.tween(COLOR_WARNING_BORDER, v);
+    let v = (json['active processes'] - 1) / (json['total processes'] - 1);
+    let background = COLOR_SUCCESS_BACKGROUND.tween(COLOR_WARNING_BACKGROUND, v);
+    let border = COLOR_SUCCESS_BORDER.tween(COLOR_WARNING_BORDER, v);
     $badge.css({
         'background-color': background.toHex(),
         'border-color': border.toHex()
@@ -48,18 +68,18 @@ function formatVersion(version) {
 }
 
 function createStatus(version) {
-    var $status = $('<div />').addClass('status');
-    var $title = $('<h2 />').text(formatVersion(version));
-    var $badge = $('<div />').addClass('status-badge pending');
-    var $text = $('<div />').addClass('status-text').text('Pending…');
+    let $status = $('<div />').addClass('status');
+    let $title = $('<h2 />').addClass('status__version').text(formatVersion(version));
+    let $badge = $('<div />').addClass('status__badge status__badge--pending');
+    let $text = $('<div />').addClass('status__text').text('Pending…');
 
     $status.append($title);
     $status.append($badge);
     $status.append($text);
 
-    $('#container').append($status);
+    $container.append($status);
 
-    var status = {
+    let status = {
         badge: $badge,
         text: $text
     };
@@ -68,50 +88,63 @@ function createStatus(version) {
 }
 
 function fetchVersion(version, idx) {
-    var status = statuses[version];
-    setTimeout(function () {
-        status.badge.css({
-            'background-color': '',
-            'border-color': ''
-        });
-        status.badge.removeClass('success error').addClass('pending');
-        status.text.text('Pending…');
-    }, Math.random() * 500);
+    let status = statuses[version];
 
-    var url = '/status-' + version + '?full&json';
-    $.getJSON(url)
-        .done(function (json) {
-            setTimeout(function () {
-                status.badge.one('animationiteration webkitAnimationIteration MSAnimationIteration', function () {
+    status.badge.css({
+        'background-color': '',
+        'border-color': ''
+    });
+    updateStatus(status);
+
+    let url = '/status-' + version + '?full&json';
+    return new Promise((resolve, reject) => {
+        $.getJSON(url)
+            .done((json) => {
+                status.badge.one('animationiteration webkitAnimationIteration MSAnimationIteration', () => {
                     updateStatus(status, json);
                 });
-            }, 750 + Math.random() * 500);
-        })
-        .fail(function (e) {
-            setTimeout(function () {
+                resolve();
+            })
+            .fail((e) => {
                 updateStatus(status, null, e);
-            }, 750 + Math.random() * 500);
-        });
+                reject();
+            });
+    });
 }
 
 
 function update() {
-    versions.forEach(fetchVersion);
+    currentState = STATE.UPDATING;
+
+    let finished = () => {
+        currentState = STATE.WAITING;
+        nextUpdate = Date.now() + UPDATE_INTERVAL;
+    };
+
+    return Promise.all(versions.map(fetchVersion))
+        .then(finished)
+        .catch(finished);
 }
 
-var nextUpdate;
 function tick() {
-    var now = Date.now();
+    let now = Date.now();
 
-    if (!nextUpdate || now >= nextUpdate) {
-        nextUpdate = now + 60000;
+    if (currentState === STATE.IDLE || (currentState === STATE.WAITING && now >= nextUpdate)) {
         update();
     }
 
-    $('#countdown').text('Next update: ' + ((nextUpdate - now) / 1000).toFixed() + 's');
+    if (currentState === STATE.UPDATING) {
+        $countdown.text('Updating…');
+    } else {
+        $countdown.text('Next update: ' + ((nextUpdate - now) / 1000).toFixed() + 's');
+    }
 }
 
-$(function () {
+$(() => {
+    $container = $('.container');
+    $countdown = $('.countdown');
+
     versions.forEach(createStatus);
     setInterval(tick, 1000);
+    tick();
 });
